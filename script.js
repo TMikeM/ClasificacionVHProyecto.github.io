@@ -7,22 +7,9 @@ let categoriaSeleccionada = null;
 /* ===== CARGAR IMÁGENES ===== */
 async function cargarImagenes() {
   try {
-    const res = await fetch(`${API_URL}?action=imagenes`, {
-      method: "GET",
-      mode: "cors"
-    });
-
-    if (!res.ok) throw new Error("Error HTTP: " + res.status);
-
-    const data = await res.json();
-
-    if (!Array.isArray(data)) {
-      throw new Error("Respuesta inválida del servidor");
-    }
-
-    imagenes = data;
+    const res = await fetch(`${API_URL}?action=imagenes`);
+    imagenes = await res.json();
     mostrarImagen();
-
   } catch (err) {
     console.error(err);
     document.getElementById("status").innerText =
@@ -45,8 +32,7 @@ function mostrarImagen() {
     return;
   }
 
-  const src =
-    `https://drive.google.com/thumbnail?id=${imagenes[indice].id}&sz=w1600`;
+  const src = `https://drive.google.com/thumbnail?id=${imagenes[indice].id}&sz=w1600`;
 
   document.getElementById("status").innerText =
     `Imagen ${indice + 1} de ${imagenes.length}`;
@@ -67,38 +53,30 @@ function actualizarSeleccion() {
     .forEach(b => b.classList.remove("selected"));
 
   if (categoriaSeleccionada !== null) {
-    const btn = document.querySelector(
-      `[data-cat="${categoriaSeleccionada}"]`
-    );
-    if (btn) btn.classList.add("selected");
+    document
+      .querySelector(`[data-cat="${categoriaSeleccionada}"]`)
+      ?.classList.add("selected");
+
     document.getElementById("send-btn").disabled = false;
   } else {
     document.getElementById("send-btn").disabled = true;
   }
 }
 
-/* ===== ENVIAR CLASIFICACIÓN ===== */
+/* ===== ENVIAR CLASIFICACIÓN (SIN JSON) ===== */
 async function enviarClasificacion() {
   if (categoriaSeleccionada === null) return;
 
   document.getElementById("send-btn").disabled = true;
 
   try {
-    const res = await fetch(API_URL, {
+    await fetch(API_URL, {
       method: "POST",
-      mode: "cors",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
+      body: new URLSearchParams({
         imageId: imagenes[indice].id,
         categoria: categoriaSeleccionada
       })
     });
-
-    if (!res.ok) throw new Error("Error al guardar");
-
-    await res.json().catch(() => {});
 
     indice++;
     mostrarImagen();
@@ -106,7 +84,7 @@ async function enviarClasificacion() {
   } catch (err) {
     console.error(err);
     document.getElementById("status").innerText =
-      "❌ Error al guardar clasificación";
+      "❌ Error al guardar";
     document.getElementById("send-btn").disabled = false;
   }
 }
