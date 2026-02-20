@@ -1,22 +1,38 @@
-const API_URL = "https://script.google.com/macros/s/AKfycbxlfzF1ndI3WxewYC2ZvCMpNOFmagEZBOFp5IMU8sdyJgIIfAEdAx_Y00U50dUPspdq/exec";
+const API_URL = "https://script.google.com/macros/s/AKfycbwMUrzUQooP59zIdwJ7RKEMri-U2YK0W641b0RhuWmEaJNZf6CChzQL5dreAfUOtb_w/exec";
 
 let imagenes = [];
 let indice = 0;
 let categoriaSeleccionada = null;
 
 /* ===== CARGAR IMÁGENES ===== */
-fetch(`${API_URL}?action=imagenes`)
-  .then(res => res.json())
-  .then(data => {
+async function cargarImagenes() {
+  try {
+    const res = await fetch(`${API_URL}?action=imagenes`, {
+      method: "GET",
+      mode: "cors"
+    });
+
+    if (!res.ok) throw new Error("Error HTTP: " + res.status);
+
+    const data = await res.json();
+
+    if (!Array.isArray(data)) {
+      throw new Error("Respuesta inválida del servidor");
+    }
+
     imagenes = data;
     mostrarImagen();
-  })
-  .catch(err => {
-    document.getElementById("status").innerText =
-      "Error cargando imágenes";
-    console.error(err);
-  });
 
+  } catch (err) {
+    console.error(err);
+    document.getElementById("status").innerText =
+      "❌ Error cargando imágenes";
+  }
+}
+
+cargarImagenes();
+
+/* ===== MOSTRAR IMAGEN ===== */
 function mostrarImagen() {
   categoriaSeleccionada = null;
   actualizarSeleccion();
@@ -39,6 +55,7 @@ function mostrarImagen() {
   document.getElementById("zoom-img").src = src;
 }
 
+/* ===== SELECCIÓN ===== */
 function seleccionarCategoria(cat) {
   categoriaSeleccionada = cat;
   actualizarSeleccion();
@@ -60,19 +77,38 @@ function actualizarSeleccion() {
   }
 }
 
-function enviarClasificacion() {
+/* ===== ENVIAR CLASIFICACIÓN ===== */
+async function enviarClasificacion() {
   if (categoriaSeleccionada === null) return;
 
-  fetch(API_URL, {
-    method: "POST",
-    body: JSON.stringify({
-      imageId: imagenes[indice].id,
-      categoria: categoriaSeleccionada
-    })
-  });
+  document.getElementById("send-btn").disabled = true;
 
-  indice++;
-  mostrarImagen();
+  try {
+    const res = await fetch(API_URL, {
+      method: "POST",
+      mode: "cors",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        imageId: imagenes[indice].id,
+        categoria: categoriaSeleccionada
+      })
+    });
+
+    if (!res.ok) throw new Error("Error al guardar");
+
+    await res.json().catch(() => {});
+
+    indice++;
+    mostrarImagen();
+
+  } catch (err) {
+    console.error(err);
+    document.getElementById("status").innerText =
+      "❌ Error al guardar clasificación";
+    document.getElementById("send-btn").disabled = false;
+  }
 }
 
 /* ===== ZOOM ===== */
@@ -82,6 +118,4 @@ function abrirZoom() {
 
 function cerrarZoom() {
   document.getElementById("zoom").style.display = "none";
-
 }
-
