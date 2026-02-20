@@ -1,4 +1,4 @@
-const API_URL = "PEGA_AQUI_LA_URL_DEL_DEPLOY_DE_APPS_SCRIPT";
+const API_URL = "https://script.google.com/macros/s/AKfycbwXvZzeX1-LLuE1AnYeX0InzIekXr6Gcb9p6TrQ_lULnUjsXCP2hit-EjnNsK7sj0JF/exec";
 
 let imagenes = [];
 let indice = 0;
@@ -82,4 +82,5 @@ function abrirZoom() {
 
 function cerrarZoom() {
   document.getElementById("zoom").style.display = "none";
+
 }
