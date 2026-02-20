@@ -1,4 +1,4 @@
-const API_URL = "https://script.google.com/macros/s/AKfycbyW7JwJg8-DOaQhsUN-V-lPYox-eh20xSNmV_uHFYTvHDChatm2xWmtQew-TL0xgMlU/exec";
+const API_URL = "https://script.google.com/macros/s/AKfycbwv-ClqjcI1k41UKe-gpeWpGnW15O5KHRVDfzuWYmmfZyhQuEqoRyFaEyq13dPqQf_T/exec";
 
 let imagenes = [];
 let indice = 0;
@@ -97,5 +97,6 @@ function abrirZoom() {
 function cerrarZoom() {
   document.getElementById("zoom").style.display = "none";
 }
+
 
 
