@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Clasificación Técnica de Van Herick</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <!-- CSS externo -->
+  <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+  <div class="container">
+    <h1>Clasificación Técnica de Van Herick</h1>
+    <h2>Seleccione el grado y confirme</h2>
+
+    <p id="status">Cargando imágenes...</p>
+
+    <div class="image-container">
+      <img
+        id="vh-image"
+        src=""
+        alt="Imagen Van Herick"
+        onclick="abrirZoom()"
+      >
+    </div>
+
+    <div class="buttons">
+      <button class="grade-btn" data-cat="1" onclick="seleccionarCategoria(1)">
+        Grado 1
+      </button>
+      <button class="grade-btn" data-cat="2" onclick="seleccionarCategoria(2)">
+        Grado 2
+      </button>
+      <button class="grade-btn" data-cat="3" onclick="seleccionarCategoria(3)">
+        Grado 3
+      </button>
+      <button class="grade-btn" data-cat="4" onclick="seleccionarCategoria(4)">
+        Grado 4
+      </button>
+      <button
+        class="invalid-btn"
+        data-cat="nofuncional"
+        onclick="seleccionarCategoria('nofuncional')"
+      >
+        Imagen no evaluable
+      </button>
+    </div>
+
+    <button id="send-btn" disabled onclick="enviarClasificacion()">
+      Enviar clasificación
+    </button>
+  </div>
+
+  <!-- ===== ZOOM OVERLAY ===== -->
+  <div class="zoom-overlay" id="zoom" onclick="cerrarZoom()">
+    <img id="zoom-img" src="">
+  </div>
+
+  <!-- JS externo -->
+  <script src="script.js"></script>
+</body>
+</html>

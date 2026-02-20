@@ -1,0 +1,123 @@
+* {
+  box-sizing: border-box;
+}
+
+body {
+  font-family: Arial, sans-serif;
+  background-color: #f4f6f8;
+  margin: 0;
+  padding: 0;
+  min-height: 100vh;
+
+  display: flex;
+  justify-content: center;
+  align-items: center; /* centrado vertical */
+}
+
+.container {
+  text-align: center;
+  padding: 28px;
+  max-width: 980px;
+  width: 100%;
+  background: #ffffff;
+  border-radius: 16px;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.1);
+}
+
+h1 {
+  margin-bottom: 4px;
+}
+
+h2 {
+  margin-top: 0;
+  color: #555;
+  font-weight: normal;
+}
+
+#status {
+  margin-top: 14px;
+  color: #666;
+}
+
+/* ===== IMAGEN ===== */
+.image-container {
+  margin: 28px 0;
+  display: flex;
+  justify-content: center;
+}
+
+#vh-image {
+  max-width: 100%;
+  max-height: 460px;
+  border-radius: 14px;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.18);
+  cursor: zoom-in;
+  transition: transform 0.2s ease;
+}
+
+/* ===== BOTONES ===== */
+.buttons {
+  margin-top: 20px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
+}
+
+button {
+  padding: 14px;
+  font-size: 15px;
+  border-radius: 10px;
+  border: none;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.grade-btn {
+  background-color: #2563eb;
+  color: white;
+}
+
+.invalid-btn {
+  background-color: #dc2626;
+  color: white;
+}
+
+.selected {
+  outline: 4px solid #22c55e;
+  background-color: #16a34a !important;
+}
+
+/* ===== BOTÓN ENVIAR ===== */
+#send-btn {
+  margin-top: 26px;
+  background-color: #22c55e;
+  color: white;
+  font-size: 16px;
+  padding: 14px;
+  width: 100%;
+  border-radius: 12px;
+}
+
+#send-btn:disabled {
+  background-color: #9ca3af;
+  cursor: not-allowed;
+}
+
+/* ===== ZOOM ===== */
+.zoom-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.85);
+  display: none;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+  cursor: zoom-out;
+}
+
+.zoom-overlay img {
+  max-width: 90%;
+  max-height: 90%;
+  border-radius: 14px;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.4);
+}
