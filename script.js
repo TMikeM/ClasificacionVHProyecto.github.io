@@ -3,7 +3,7 @@ const API_URL = "https://script.google.com/macros/s/AKfycbwGgiQGe6tpDq0JNexrAr4M
 // ====== ESTADO ======
 let imagenes = [];
 let indiceActual = 0;
-let categoriaSeleccionada = null;
+let selecciones = {};   // { imageId: categoria } — recuerda la selección por imagen
 let enviando = false;
 
 // ====== INIT ======
@@ -52,7 +52,10 @@ function mostrarImagen(idx) {
     document.getElementById("btn-next").disabled = idx === imagenes.length - 1;
 
     actualizarDotActivo(idx);
-    resetSeleccion();
+
+    // Restaurar selección guardada para esta imagen (o limpiar si no hay)
+    const selGuardada = selecciones[archivo.id] ?? null;
+    restaurarSeleccion(selGuardada);
   }, 150);
 }
 
@@ -65,6 +68,8 @@ function navegarImagen(delta) {
 }
 
 function manejarTeclado(e) {
+  // No navegar si hay un input enfocado
+  if (e.target.tagName === "INPUT") return;
   if (e.key === "ArrowLeft")  navegarImagen(-1);
   if (e.key === "ArrowRight") navegarImagen(1);
   if (e.key === "Escape")     cerrarZoom();
@@ -92,25 +97,28 @@ function actualizarDotActivo(idx) {
 
 // ====== SELECCIONAR CATEGORÍA ======
 function seleccionarCategoria(cat) {
-  categoriaSeleccionada = cat;
+  const archivo = imagenes[indiceActual];
+  selecciones[archivo.id] = cat;   // guardar en memoria
+
   document.querySelectorAll(".grade-btn, .invalid-btn").forEach(b => {
     b.classList.toggle("selected", b.dataset.cat == cat);
   });
   document.getElementById("send-btn").disabled = false;
 }
 
-function resetSeleccion() {
-  categoriaSeleccionada = null;
-  document.querySelectorAll(".grade-btn, .invalid-btn").forEach(b =>
-    b.classList.remove("selected")
-  );
-  document.getElementById("send-btn").disabled = true;
+// Pinta los botones según la selección guardada (o limpia si null)
+function restaurarSeleccion(cat) {
+  document.querySelectorAll(".grade-btn, .invalid-btn").forEach(b => {
+    b.classList.toggle("selected", cat !== null && b.dataset.cat == cat);
+  });
+  document.getElementById("send-btn").disabled = (cat === null);
 }
 
 // ====== ENVIAR ======
 async function enviarClasificacion() {
-  if (!categoriaSeleccionada || enviando) return;
   const archivo = imagenes[indiceActual];
+  const cat = selecciones[archivo.id] ?? null;
+  if (!cat || enviando) return;
 
   enviando = true;
   const btn = document.getElementById("send-btn");
@@ -122,11 +130,14 @@ async function enviarClasificacion() {
       method: "POST",
       body: new URLSearchParams({
         imageId: archivo.id,
-        categoria: categoriaSeleccionada
+        categoria: cat
       })
     });
 
-    showToast(`✓ Clasificado como ${etiquetaCategoria(categoriaSeleccionada)}`, "success");
+    showToast(`✓ Clasificado como ${etiquetaCategoria(cat)}`, "success");
+
+    // Limpiar selección guardada para esta imagen y eliminarla de la lista
+    delete selecciones[archivo.id];
     imagenes.splice(indiceActual, 1);
 
     if (!imagenes.length) {
@@ -183,6 +194,7 @@ function abrirZoom() {
 function cerrarZoom() {
   document.getElementById("zoom").style.display = "none";
 }
+
 
 
 
