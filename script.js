@@ -1,95 +1,181 @@
-const API_URL = "https://script.google.com/macros/s/AKfycbwS_aUXnWE1zqZfh6_4MWWatqBsa-f5itVRwSZMaO5CugOfQo62w2WIKAu7kPbIDTc/exec";
+const API_URL = "https://script.google.com/macros/s/AKfycbwGgiQGe6tpDq0JNexrAr4M6EsoGV0__3C6TEp55G17UKMNcPHsNx5IP_dbLDdxyh8x/exec";
 
+// ====== ESTADO ======
 let imagenes = [];
-let indice = 0;
+let indiceActual = 0;
 let categoriaSeleccionada = null;
+let enviando = false;
 
-/* ===== CARGAR IMÁGENES ===== */
+// ====== INIT ======
+document.addEventListener("DOMContentLoaded", () => {
+  cargarImagenes();
+  document.addEventListener("keydown", manejarTeclado);
+});
+
+// ====== CARGAR IMÁGENES ======
 async function cargarImagenes() {
+  setStatus("Cargando imágenes…");
   try {
     const res = await fetch(`${API_URL}?action=imagenes`);
     imagenes = await res.json();
-    mostrarImagen();
+    if (!imagenes.length) {
+      setStatus("✓ No hay imágenes pendientes.");
+      ocultarViewer();
+      return;
+    }
+    indiceActual = 0;
+    renderDots();
+    mostrarImagen(indiceActual);
   } catch (err) {
-    console.error(err);
-    document.getElementById("status").innerText =
-      "❌ Error cargando imágenes";
+    setStatus("❌ Error al cargar imágenes: " + err.message);
   }
 }
 
-cargarImagenes();
+// ====== MOSTRAR IMAGEN ======
+function mostrarImagen(idx) {
+  const img = document.getElementById("vh-image");
+  const zoomImg = document.getElementById("zoom-img");
 
-/* ===== MOSTRAR IMAGEN ===== */
-function mostrarImagen() {
-  categoriaSeleccionada = null;
-  actualizarSeleccion();
+  img.style.opacity = "0";
 
-  if (indice >= imagenes.length) {
-    document.getElementById("status").innerText =
-      "✔ Clasificación finalizada";
-    document.getElementById("vh-image").style.display = "none";
-    document.getElementById("send-btn").style.display = "none";
-    return;
-  }
+  setTimeout(() => {
+    const archivo = imagenes[idx];
+    const src = `https://drive.google.com/thumbnail?id=${archivo.id}&sz=w1600`;
+    img.src = src;
+    zoomImg.src = src;
+    img.onload = () => { img.style.opacity = "1"; };
 
-  const src = `https://drive.google.com/thumbnail?id=${imagenes[indice].id}&sz=w1600`;
+    setStatus(archivo.name);
+    document.getElementById("counter").textContent = `${idx + 1} / ${imagenes.length}`;
 
-  document.getElementById("status").innerText =
-    `Imagen ${indice + 1} de ${imagenes.length}`;
+    document.getElementById("btn-prev").disabled = idx === 0;
+    document.getElementById("btn-next").disabled = idx === imagenes.length - 1;
 
-  document.getElementById("vh-image").src = src;
-  document.getElementById("zoom-img").src = src;
+    actualizarDotActivo(idx);
+    resetSeleccion();
+  }, 150);
 }
 
-/* ===== SELECCIÓN ===== */
+// ====== NAVEGACIÓN ======
+function navegarImagen(delta) {
+  const nuevo = indiceActual + delta;
+  if (nuevo < 0 || nuevo >= imagenes.length) return;
+  indiceActual = nuevo;
+  mostrarImagen(indiceActual);
+}
+
+function manejarTeclado(e) {
+  if (e.key === "ArrowLeft")  navegarImagen(-1);
+  if (e.key === "ArrowRight") navegarImagen(1);
+  if (e.key === "Escape")     cerrarZoom();
+}
+
+// ====== DOTS ======
+function renderDots() {
+  const bar = document.getElementById("dots-bar");
+  bar.innerHTML = "";
+  const max = Math.min(imagenes.length, 20);
+  for (let i = 0; i < max; i++) {
+    const d = document.createElement("span");
+    d.className = "dot" + (i === 0 ? " active" : "");
+    d.dataset.idx = i;
+    d.onclick = () => { indiceActual = i; mostrarImagen(i); };
+    bar.appendChild(d);
+  }
+}
+
+function actualizarDotActivo(idx) {
+  document.querySelectorAll(".dot").forEach(d => {
+    d.classList.toggle("active", parseInt(d.dataset.idx) === idx);
+  });
+}
+
+// ====== SELECCIONAR CATEGORÍA ======
 function seleccionarCategoria(cat) {
   categoriaSeleccionada = cat;
-  actualizarSeleccion();
+  document.querySelectorAll(".grade-btn, .invalid-btn").forEach(b => {
+    b.classList.toggle("selected", b.dataset.cat == cat);
+  });
+  document.getElementById("send-btn").disabled = false;
 }
 
-function actualizarSeleccion() {
-  document
-    .querySelectorAll(".grade-btn, .invalid-btn")
-    .forEach(b => b.classList.remove("selected"));
-
-  if (categoriaSeleccionada !== null) {
-    document
-      .querySelector(`[data-cat="${categoriaSeleccionada}"]`)
-      ?.classList.add("selected");
-
-    document.getElementById("send-btn").disabled = false;
-  } else {
-    document.getElementById("send-btn").disabled = true;
-  }
-}
-
-/* ===== ENVIAR CLASIFICACIÓN (SIN JSON) ===== */
-async function enviarClasificacion() {
-  if (categoriaSeleccionada === null) return;
-
+function resetSeleccion() {
+  categoriaSeleccionada = null;
+  document.querySelectorAll(".grade-btn, .invalid-btn").forEach(b =>
+    b.classList.remove("selected")
+  );
   document.getElementById("send-btn").disabled = true;
+}
+
+// ====== ENVIAR ======
+async function enviarClasificacion() {
+  if (!categoriaSeleccionada || enviando) return;
+  const archivo = imagenes[indiceActual];
+
+  enviando = true;
+  const btn = document.getElementById("send-btn");
+  btn.innerHTML = "Enviando…";
+  btn.disabled = true;
 
   try {
     await fetch(API_URL, {
       method: "POST",
       body: new URLSearchParams({
-        imageId: imagenes[indice].id,
+        imageId: archivo.id,
         categoria: categoriaSeleccionada
       })
     });
 
-    indice++;
-    mostrarImagen();
+    showToast(`✓ Clasificado como ${etiquetaCategoria(categoriaSeleccionada)}`, "success");
+    imagenes.splice(indiceActual, 1);
+
+    if (!imagenes.length) {
+      setStatus("✓ Todas las imágenes clasificadas.");
+      ocultarViewer();
+      return;
+    }
+
+    if (indiceActual >= imagenes.length) indiceActual = imagenes.length - 1;
+    renderDots();
+    mostrarImagen(indiceActual);
 
   } catch (err) {
-    console.error(err);
-    document.getElementById("status").innerText =
-      "❌ Error al guardar";
-    document.getElementById("send-btn").disabled = false;
+    showToast("❌ Error al guardar: " + err.message, "error");
+    btn.disabled = false;
+  } finally {
+    enviando = false;
+    btn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg> Confirmar clasificación`;
   }
 }
 
-/* ===== ZOOM ===== */
+// ====== HELPERS ======
+function setStatus(msg) {
+  document.getElementById("status").textContent = msg;
+}
+
+function ocultarViewer() {
+  document.querySelector(".viewer-wrapper").style.opacity = "0.3";
+  document.querySelector(".buttons").style.pointerEvents = "none";
+  document.getElementById("dots-bar").innerHTML = "";
+  document.getElementById("counter").textContent = "";
+  document.getElementById("btn-prev").disabled = true;
+  document.getElementById("btn-next").disabled = true;
+  document.getElementById("send-btn").style.display = "none";
+}
+
+function etiquetaCategoria(cat) {
+  const labels = { "1": "Grado 1", "2": "Grado 2", "3": "Grado 3", "4": "Grado 4", "nofuncional": "No evaluable" };
+  return labels[cat] || cat;
+}
+
+function showToast(msg, type = "") {
+  const t = document.getElementById("toast");
+  t.textContent = msg;
+  t.className = "toast show " + type;
+  setTimeout(() => { t.className = "toast"; }, 3500);
+}
+
+// ====== ZOOM ======
 function abrirZoom() {
   document.getElementById("zoom").style.display = "flex";
 }
@@ -97,7 +183,6 @@ function abrirZoom() {
 function cerrarZoom() {
   document.getElementById("zoom").style.display = "none";
 }
-
 
 
 
