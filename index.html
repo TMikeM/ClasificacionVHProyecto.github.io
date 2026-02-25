@@ -2,62 +2,103 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8">
-  <title>Clasificación Técnica de Van Herick</title>
+  <title>Van Herick · Clasificación Técnica</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
-  <!-- CSS externo -->
+  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
 </head>
-
 <body>
+
+  <div class="bg-orb orb1"></div>
+  <div class="bg-orb orb2"></div>
+
   <div class="container">
-    <h1>Clasificación Técnica de Van Herick</h1>
-    <h2>Seleccione el grado y confirme</h2>
 
-    <p id="status">Cargando imágenes...</p>
+    <!-- HEADER -->
+    <header class="header">
+      <div class="header-badge">Biomicroscopía</div>
+      <h1>Van Herick</h1>
+      <p class="header-sub">Clasificación de ángulo iridocorneal</p>
+    </header>
 
-    <div class="image-container">
-      <img
-        id="vh-image"
-        src=""
-        alt="Imagen Van Herick"
-        onclick="abrirZoom()"
-      >
+    <!-- STATUS / CONTADOR -->
+    <div class="status-bar">
+      <span id="status">Cargando imágenes…</span>
+      <span id="counter" class="counter"></span>
     </div>
 
+    <!-- IMAGEN + FLECHAS -->
+    <div class="viewer-wrapper">
+      <button class="nav-arrow left" id="btn-prev" onclick="navegarImagen(-1)" title="Anterior" disabled>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg>
+      </button>
+
+      <div class="image-container">
+        <img id="vh-image" src="" alt="Imagen Van Herick" onclick="abrirZoom()">
+        <div class="zoom-hint">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
+          Clic para ampliar
+        </div>
+      </div>
+
+      <button class="nav-arrow right" id="btn-next" onclick="navegarImagen(1)" title="Siguiente" disabled>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
+      </button>
+    </div>
+
+    <!-- DOTS indicador -->
+    <div class="dots-bar" id="dots-bar"></div>
+
+    <!-- BOTONES GRADO -->
+    <div class="section-label">Seleccione el grado</div>
     <div class="buttons">
       <button class="grade-btn" data-cat="1" onclick="seleccionarCategoria(1)">
-        Grado 1
+        <span class="btn-grade">G1</span>
+        <span class="btn-desc">≤ ¼ córnea</span>
       </button>
       <button class="grade-btn" data-cat="2" onclick="seleccionarCategoria(2)">
-        Grado 2
+        <span class="btn-grade">G2</span>
+        <span class="btn-desc">¼ córnea</span>
       </button>
       <button class="grade-btn" data-cat="3" onclick="seleccionarCategoria(3)">
-        Grado 3
+        <span class="btn-grade">G3</span>
+        <span class="btn-desc">¼ – ½ córnea</span>
       </button>
       <button class="grade-btn" data-cat="4" onclick="seleccionarCategoria(4)">
-        Grado 4
+        <span class="btn-grade">G4</span>
+        <span class="btn-desc">≥ ½ córnea</span>
       </button>
-      <button
-        class="invalid-btn"
-        data-cat="nofuncional"
-        onclick="seleccionarCategoria('nofuncional')"
-      >
-        Imagen no evaluable
+      <button class="invalid-btn" data-cat="nofuncional" onclick="seleccionarCategoria('nofuncional')">
+        <span class="btn-grade">—</span>
+        <span class="btn-desc">No evaluable</span>
       </button>
     </div>
 
+    <!-- BOTÓN ENVIAR -->
     <button id="send-btn" disabled onclick="enviarClasificacion()">
-      Enviar clasificación
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+      Confirmar clasificación
     </button>
+
   </div>
 
-  <!-- ===== ZOOM OVERLAY ===== -->
+  <!-- ZOOM OVERLAY -->
   <div class="zoom-overlay" id="zoom" onclick="cerrarZoom()">
-    <img id="zoom-img" src="">
+    <div class="zoom-nav">
+      <button class="zoom-arrow" onclick="event.stopPropagation(); navegarImagen(-1)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg>
+      </button>
+      <img id="zoom-img" src="">
+      <button class="zoom-arrow" onclick="event.stopPropagation(); navegarImagen(1)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
+      </button>
+    </div>
+    <div class="zoom-close">ESC · clic para cerrar</div>
   </div>
 
-  <!-- JS externo -->
+  <!-- TOAST -->
+  <div class="toast" id="toast"></div>
+
   <script src="script.js"></script>
 </body>
 </html>
