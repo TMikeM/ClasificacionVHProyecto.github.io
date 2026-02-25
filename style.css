@@ -213,6 +213,8 @@ body {
   transform: scale(1.3);
 }
 .dot:hover:not(.active) { background: var(--muted); }
+.dot.dot-sm  { width: 5px; height: 5px; opacity: 0.5; }
+.dot.dot-xs  { width: 4px; height: 4px; opacity: 0.3; }
 
 /* ===== SECTION LABEL ===== */
 .section-label {
