@@ -3,8 +3,10 @@ const API_URL = "https://script.google.com/macros/s/AKfycbwGgiQGe6tpDq0JNexrAr4M
 // ====== ESTADO ======
 let imagenes = [];
 let indiceActual = 0;
-let selecciones = {};   // { imageId: categoria } — recuerda la selección por imagen
+let selecciones = {};
 let enviando = false;
+
+const DOTS_VISIBLES = 9; // cuántos puntos se muestran a la vez
 
 // ====== INIT ======
 document.addEventListener("DOMContentLoaded", () => {
@@ -51,9 +53,8 @@ function mostrarImagen(idx) {
     document.getElementById("btn-prev").disabled = idx === 0;
     document.getElementById("btn-next").disabled = idx === imagenes.length - 1;
 
-    actualizarDotActivo(idx);
+    actualizarDots(idx);
 
-    // Restaurar selección guardada para esta imagen (o limpiar si no hay)
     const selGuardada = selecciones[archivo.id] ?? null;
     restaurarSeleccion(selGuardada);
   }, 150);
@@ -68,37 +69,71 @@ function navegarImagen(delta) {
 }
 
 function manejarTeclado(e) {
-  // No navegar si hay un input enfocado
   if (e.target.tagName === "INPUT") return;
   if (e.key === "ArrowLeft")  navegarImagen(-1);
   if (e.key === "ArrowRight") navegarImagen(1);
   if (e.key === "Escape")     cerrarZoom();
 }
 
-// ====== DOTS ======
+// ====== DOTS — ventana deslizante ======
 function renderDots() {
   const bar = document.getElementById("dots-bar");
   bar.innerHTML = "";
-  const max = Math.min(imagenes.length, 20);
-  for (let i = 0; i < max; i++) {
+
+  const total = imagenes.length;
+  if (total <= 1) return; // con 1 imagen no tiene sentido mostrar dots
+
+  // Cuántos dots crear: si hay menos que DOTS_VISIBLES, todos; si no, DOTS_VISIBLES
+  const cantidad = Math.min(total, DOTS_VISIBLES);
+  for (let i = 0; i < cantidad; i++) {
     const d = document.createElement("span");
-    d.className = "dot" + (i === 0 ? " active" : "");
-    d.dataset.idx = i;
-    d.onclick = () => { indiceActual = i; mostrarImagen(i); };
+    d.className = "dot";
     bar.appendChild(d);
   }
+
+  actualizarDots(indiceActual);
 }
 
-function actualizarDotActivo(idx) {
-  document.querySelectorAll(".dot").forEach(d => {
-    d.classList.toggle("active", parseInt(d.dataset.idx) === idx);
+function actualizarDots(idx) {
+  const bar = document.getElementById("dots-bar");
+  const dotEls = bar.querySelectorAll(".dot");
+  if (!dotEls.length) return;
+
+  const total = imagenes.length;
+  const cantidad = dotEls.length;
+
+  // Calcular ventana: qué rango de índices reales representan los dots visibles
+  let inicio = idx - Math.floor(cantidad / 2);
+  inicio = Math.max(0, inicio);
+  inicio = Math.min(inicio, total - cantidad);
+
+  dotEls.forEach((d, i) => {
+    const realIdx = inicio + i;
+
+    // Quitar eventos anteriores clonando el nodo
+    const nuevo = d.cloneNode(true);
+    d.parentNode.replaceChild(nuevo, d);
+
+    nuevo.classList.toggle("active", realIdx === idx);
+
+    // Tamaño contextual: más pequeños en los extremos si hay overflow
+    nuevo.classList.remove("dot-sm", "dot-xs");
+    if (total > cantidad) {
+      if (i === 0 && inicio > 0) nuevo.classList.add("dot-xs");
+      else if (i === 1 && inicio > 0) nuevo.classList.add("dot-sm");
+      else if (i === cantidad - 1 && inicio + cantidad < total) nuevo.classList.add("dot-xs");
+      else if (i === cantidad - 2 && inicio + cantidad < total) nuevo.classList.add("dot-sm");
+    }
+
+    nuevo.onclick = () => { indiceActual = realIdx; mostrarImagen(realIdx); };
+    nuevo.title = `Imagen ${realIdx + 1}`;
   });
 }
 
 // ====== SELECCIONAR CATEGORÍA ======
 function seleccionarCategoria(cat) {
   const archivo = imagenes[indiceActual];
-  selecciones[archivo.id] = cat;   // guardar en memoria
+  selecciones[archivo.id] = cat;
 
   document.querySelectorAll(".grade-btn, .invalid-btn").forEach(b => {
     b.classList.toggle("selected", b.dataset.cat == cat);
@@ -106,7 +141,6 @@ function seleccionarCategoria(cat) {
   document.getElementById("send-btn").disabled = false;
 }
 
-// Pinta los botones según la selección guardada (o limpia si null)
 function restaurarSeleccion(cat) {
   document.querySelectorAll(".grade-btn, .invalid-btn").forEach(b => {
     b.classList.toggle("selected", cat !== null && b.dataset.cat == cat);
@@ -136,7 +170,6 @@ async function enviarClasificacion() {
 
     showToast(`✓ Clasificado como ${etiquetaCategoria(cat)}`, "success");
 
-    // Limpiar selección guardada para esta imagen y eliminarla de la lista
     delete selecciones[archivo.id];
     imagenes.splice(indiceActual, 1);
 
