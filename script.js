@@ -1,4 +1,4 @@
-const API_URL = "https://script.google.com/macros/s/AKfycbwLsLbJzMadGR6-Gjto8Qy322iCNaZI9PVMIxVNO6lenluAw2scU8ODoVV50goYdbaM/exec";
+const API_URL = "https://script.google.com/macros/s/AKfycbwl1GpXZcPg-8Nu1bcyOxNt3RqCsEfDNrygTH5s63AcQBLTiizRMh0DHI2pB7v8DK7i/exec";
 
 // ====== ESTADO ======
 let imagenes      = [];
@@ -272,3 +272,4 @@ function showToast(msg, type = "") {
 // ====== ZOOM ======
 function abrirZoom()  { document.getElementById("zoom").style.display = "flex"; }
 function cerrarZoom() { document.getElementById("zoom").style.display = "none"; }
+
