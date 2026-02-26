@@ -1,19 +1,17 @@
-const API_URL = "https://script.google.com/macros/s/AKfycbwl1GpXZcPg-8Nu1bcyOxNt3RqCsEfDNrygTH5s63AcQBLTiizRMh0DHI2pB7v8DK7i/exec";
+const API_URL = "https://script.google.com/macros/s/AKfycbwLsLbJzMadGR6-Gjto8Qy322iCNaZI9PVMIxVNO6lenluAw2scU8ODoVV50goYdbaM/exec";
 
 // ====== ESTADO ======
-let imagenes = [];
-let indiceActual = 0;
-let selecciones = {};
-let enviando = false;
+let imagenes      = [];
+let indiceActual  = 0;
+let selecciones   = {};
+let enviando      = false;
 
 // ── Paginación ──
-const PAGE_SIZE = 30;
-let paginaActual = 0;       // página que se cargó por última vez
-let totalImagenes = 0;      // total reportado por el servidor
-let cargandoPagina = false;
-// El servidor debe devolver { total: N, items: [...] } cuando se le pasa page=
-// Si sigues devolviendo un array plano, se usa modo "array completo" (fallback).
-const PREFETCH_UMBRAL = 5;  // cuántas imágenes antes del final se dispara la siguiente carga
+const PAGE_SIZE       = 30;
+let paginaActual      = 0;
+let totalImagenes     = 0;
+let cargandoPagina    = false;
+const PREFETCH_UMBRAL = 8;   // cargar siguiente página cuando queden ≤8 imágenes
 
 const DOTS_VISIBLES = 9;
 
@@ -31,23 +29,23 @@ async function cargarPagina(pagina, esInicio = false) {
   if (esInicio) setStatus("Cargando imágenes…");
 
   try {
-    const res = await fetch(`${API_URL}?action=imagenes&page=${pagina}&pageSize=${PAGE_SIZE}`);
+    const res  = await fetch(`${API_URL}?action=imagenes&page=${pagina}&pageSize=${PAGE_SIZE}`);
     const data = await res.json();
 
-    // Soporte para dos formatos de respuesta:
-    // A) { total: N, items: [...] }   ← ideal, el backend pagina
-    // B) Array plano                  ← fallback: cargamos todo de una y paginamos en cliente
+    // Soporte para { total, items } y array plano (fallback)
+    let nuevas;
     if (Array.isArray(data)) {
-      // Fallback: si el servidor devuelve todo el array, lo troceamos aquí
-      const todas = data;
-      totalImagenes = todas.length;
-      const inicio = pagina * PAGE_SIZE;
-      const nuevas = todas.slice(inicio, inicio + PAGE_SIZE);
-      imagenes = [...imagenes, ...nuevas];
+      totalImagenes = data.length;
+      nuevas        = data.slice(pagina * PAGE_SIZE, (pagina + 1) * PAGE_SIZE);
     } else {
       totalImagenes = data.total ?? (imagenes.length + data.items.length);
-      imagenes = [...imagenes, ...data.items];
+      nuevas        = data.items;
     }
+
+    // Evitar duplicados por si el mismo id ya estaba cargado
+    const idsActuales = new Set(imagenes.map(i => i.id));
+    const sinDuplicar = nuevas.filter(i => !idsActuales.has(i.id));
+    imagenes = [...imagenes, ...sinDuplicar];
 
     paginaActual = pagina;
 
@@ -62,7 +60,6 @@ async function cargarPagina(pagina, esInicio = false) {
       renderDots();
       mostrarImagen(indiceActual);
     } else {
-      // Solo actualizar dots con el nuevo total conocido
       renderDots();
     }
   } catch (err) {
@@ -72,42 +69,39 @@ async function cargarPagina(pagina, esInicio = false) {
   }
 }
 
-// Comprueba si hay que pre-cargar la siguiente página
+// Dispara la siguiente página si estamos cerca del final de lo cargado
 function checkPrefetch() {
-  const imagenesRestantes = imagenes.length - 1 - indiceActual;
-  const hayMas = imagenes.length < totalImagenes;
-  if (hayMas && imagenesRestantes <= PREFETCH_UMBRAL) {
+  const restantes = imagenes.length - 1 - indiceActual;
+  const hayMas    = imagenes.length < totalImagenes;
+  if (hayMas && restantes <= PREFETCH_UMBRAL && !cargandoPagina) {
     cargarPagina(paginaActual + 1);
   }
 }
 
 // ====== MOSTRAR IMAGEN ======
 function mostrarImagen(idx) {
-  const img = document.getElementById("vh-image");
+  const img     = document.getElementById("vh-image");
   const zoomImg = document.getElementById("zoom-img");
 
   img.style.opacity = "0";
 
   setTimeout(() => {
     const archivo = imagenes[idx];
-    const src = `https://drive.google.com/thumbnail?id=${archivo.id}&sz=w1600`;
-    img.src = src;
+    const src     = `https://drive.google.com/thumbnail?id=${archivo.id}&sz=w1600`;
+    img.src     = src;
     zoomImg.src = src;
-    img.onload = () => { img.style.opacity = "1"; };
+    img.onload  = () => { img.style.opacity = "1"; };
 
     setStatus(archivo.name);
-    document.getElementById("counter").textContent = `${idx + 1} / ${totalImagenes || imagenes.length}`;
+    document.getElementById("counter").textContent =
+      `${idx + 1} / ${totalImagenes || imagenes.length}`;
 
     document.getElementById("btn-prev").disabled = idx === 0;
-    // Deshabilitar "siguiente" solo si es la última imagen conocida Y no hay más páginas
     const esUltima = idx === imagenes.length - 1 && imagenes.length >= totalImagenes;
     document.getElementById("btn-next").disabled = esUltima;
 
     actualizarDots(idx);
-
-    const selGuardada = selecciones[archivo.id] ?? null;
-    restaurarSeleccion(selGuardada);
-
+    restaurarSeleccion(selecciones[archivo.id] ?? null);
     checkPrefetch();
   }, 150);
 }
@@ -115,9 +109,7 @@ function mostrarImagen(idx) {
 // ====== NAVEGACIÓN ======
 function navegarImagen(delta) {
   const nuevo = indiceActual + delta;
-  if (nuevo < 0) return;
-  // Si intentamos ir más allá de lo cargado pero aún hay páginas, esperamos
-  if (nuevo >= imagenes.length) return;
+  if (nuevo < 0 || nuevo >= imagenes.length) return;
   indiceActual = nuevo;
   mostrarImagen(indiceActual);
 }
@@ -143,16 +135,15 @@ function renderDots() {
     d.className = "dot";
     bar.appendChild(d);
   }
-
   actualizarDots(indiceActual);
 }
 
 function actualizarDots(idx) {
-  const bar = document.getElementById("dots-bar");
+  const bar    = document.getElementById("dots-bar");
   const dotEls = bar.querySelectorAll(".dot");
   if (!dotEls.length) return;
 
-  const total = imagenes.length;
+  const total    = imagenes.length;
   const cantidad = dotEls.length;
 
   let inicio = idx - Math.floor(cantidad / 2);
@@ -161,22 +152,21 @@ function actualizarDots(idx) {
 
   dotEls.forEach((d, i) => {
     const realIdx = inicio + i;
-
-    const nuevo = d.cloneNode(true);
+    const nuevo   = d.cloneNode(true);
     d.parentNode.replaceChild(nuevo, d);
 
     nuevo.classList.toggle("active", realIdx === idx);
-
     nuevo.classList.remove("dot-sm", "dot-xs");
+
     if (total > cantidad) {
-      if (i === 0 && inicio > 0) nuevo.classList.add("dot-xs");
-      else if (i === 1 && inicio > 0) nuevo.classList.add("dot-sm");
-      else if (i === cantidad - 1 && inicio + cantidad < total) nuevo.classList.add("dot-xs");
-      else if (i === cantidad - 2 && inicio + cantidad < total) nuevo.classList.add("dot-sm");
+      if      (i === 0            && inicio > 0)                    nuevo.classList.add("dot-xs");
+      else if (i === 1            && inicio > 0)                    nuevo.classList.add("dot-sm");
+      else if (i === cantidad - 1 && inicio + cantidad < total)     nuevo.classList.add("dot-xs");
+      else if (i === cantidad - 2 && inicio + cantidad < total)     nuevo.classList.add("dot-sm");
     }
 
     nuevo.onclick = () => { indiceActual = realIdx; mostrarImagen(realIdx); };
-    nuevo.title = `Imagen ${realIdx + 1}`;
+    nuevo.title   = `Imagen ${realIdx + 1}`;
   });
 }
 
@@ -184,7 +174,6 @@ function actualizarDots(idx) {
 function seleccionarCategoria(cat) {
   const archivo = imagenes[indiceActual];
   selecciones[archivo.id] = cat;
-
   document.querySelectorAll(".grade-btn, .invalid-btn").forEach(b => {
     b.classList.toggle("selected", b.dataset.cat == cat);
   });
@@ -201,30 +190,36 @@ function restaurarSeleccion(cat) {
 // ====== ENVIAR ======
 async function enviarClasificacion() {
   const archivo = imagenes[indiceActual];
-  const cat = selecciones[archivo.id] ?? null;
+  const cat     = selecciones[archivo.id] ?? null;
   if (!cat || enviando) return;
 
   enviando = true;
   const btn = document.getElementById("send-btn");
   btn.innerHTML = "Enviando…";
-  btn.disabled = true;
+  btn.disabled  = true;
 
   try {
     await fetch(API_URL, {
       method: "POST",
-      body: new URLSearchParams({
-        imageId: archivo.id,
-        categoria: cat
-      })
+      body: new URLSearchParams({ imageId: archivo.id, categoria: cat })
     });
 
     showToast(`✓ Clasificado como ${etiquetaCategoria(cat)}`, "success");
 
+    // Quitar de la lista local
     delete selecciones[archivo.id];
     imagenes.splice(indiceActual, 1);
     totalImagenes = Math.max(0, totalImagenes - 1);
 
-    if (!imagenes.length && imagenes.length >= totalImagenes) {
+    if (!imagenes.length) {
+      if (imagenes.length < totalImagenes) {
+        // Quedan más en el servidor → cargar siguiente lote
+        paginaActual  = 0;
+        imagenes      = [];
+        totalImagenes = 0;
+        await cargarPagina(0, true);
+        return;
+      }
       setStatus("✓ Todas las imágenes clasificadas.");
       ocultarViewer();
       return;
@@ -233,13 +228,17 @@ async function enviarClasificacion() {
     if (indiceActual >= imagenes.length) indiceActual = imagenes.length - 1;
     renderDots();
     mostrarImagen(indiceActual);
+    checkPrefetch();
 
   } catch (err) {
     showToast("❌ Error al guardar: " + err.message, "error");
     btn.disabled = false;
   } finally {
     enviando = false;
-    btn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg> Confirmar clasificación`;
+    btn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+      <line x1="22" y1="2" x2="11" y2="13"/>
+      <polygon points="22 2 15 22 11 13 2 9 22 2"/>
+    </svg> Confirmar clasificación`;
   }
 }
 
@@ -249,13 +248,13 @@ function setStatus(msg) {
 }
 
 function ocultarViewer() {
-  document.querySelector(".viewer-wrapper").style.opacity = "0.3";
-  document.querySelector(".buttons").style.pointerEvents = "none";
-  document.getElementById("dots-bar").innerHTML = "";
-  document.getElementById("counter").textContent = "";
-  document.getElementById("btn-prev").disabled = true;
-  document.getElementById("btn-next").disabled = true;
-  document.getElementById("send-btn").style.display = "none";
+  document.querySelector(".viewer-wrapper").style.opacity  = "0.3";
+  document.querySelector(".buttons").style.pointerEvents   = "none";
+  document.getElementById("dots-bar").innerHTML            = "";
+  document.getElementById("counter").textContent           = "";
+  document.getElementById("btn-prev").disabled             = true;
+  document.getElementById("btn-next").disabled             = true;
+  document.getElementById("send-btn").style.display        = "none";
 }
 
 function etiquetaCategoria(cat) {
@@ -266,17 +265,10 @@ function etiquetaCategoria(cat) {
 function showToast(msg, type = "") {
   const t = document.getElementById("toast");
   t.textContent = msg;
-  t.className = "toast show " + type;
+  t.className   = "toast show " + type;
   setTimeout(() => { t.className = "toast"; }, 3500);
 }
 
 // ====== ZOOM ======
-function abrirZoom() {
-  document.getElementById("zoom").style.display = "flex";
-}
-
-function cerrarZoom() {
-  document.getElementById("zoom").style.display = "none";
-}
-
-
+function abrirZoom()  { document.getElementById("zoom").style.display = "flex"; }
+function cerrarZoom() { document.getElementById("zoom").style.display = "none"; }
