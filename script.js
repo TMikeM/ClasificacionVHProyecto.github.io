@@ -1,4 +1,4 @@
-const API_URL = "https://script.google.com/macros/s/AKfycbxyK31Xjh0wIeE7Q7-9XRAtuexglp6uM8tA-5k-5ptXeEUrcUNPPmDL5l1I_W8yk4cB/exec";
+const API_URL = "https://script.google.com/macros/s/AKfycbz6AqqbOf67v-DzHL0XULNZKdWVRL2sNqFE6X9H1jacrPfCAVF_nc7mNxt4sCgdtkDi/exec";
 
 // ====== ESTADO ======
 let imagenes      = [];
@@ -11,13 +11,44 @@ const PAGE_SIZE       = 30;
 let paginaActual      = 0;
 let totalImagenes     = 0;
 let cargandoPagina    = false;
-const PREFETCH_UMBRAL = 8;   // cargar siguiente página cuando queden ≤8 imágenes
+const PREFETCH_UMBRAL = 8;
 
 const DOTS_VISIBLES = 9;
+
+// ── Token OAuth ──
+// El GS embebe el token en las URLs. Refrescamos cada 50 min
+// para evitar que expire (duración real: ~60 min).
+let tokenRefreshTimer = null;
+const TOKEN_REFRESH_MS = 50 * 60 * 1000; // 50 minutos
+
+async function refrescarToken() {
+  try {
+    const res  = await fetch(`${API_URL}?action=token`);
+    const data = await res.json();
+    if (!data.token) return;
+
+    // Actualizar las URLs de todas las imágenes ya cargadas con el nuevo token
+    imagenes = imagenes.map(img => {
+      const url = new URL(img.url);
+      url.searchParams.set("access_token", data.token);
+      return { ...img, url: url.toString() };
+    });
+
+    console.log("Token OAuth renovado");
+  } catch (err) {
+    console.warn("No se pudo renovar el token:", err.message);
+  }
+}
+
+function iniciarRefreshToken() {
+  if (tokenRefreshTimer) clearInterval(tokenRefreshTimer);
+  tokenRefreshTimer = setInterval(refrescarToken, TOKEN_REFRESH_MS);
+}
 
 // ====== INIT ======
 document.addEventListener("DOMContentLoaded", () => {
   cargarPagina(0, true);
+  iniciarRefreshToken();
   document.addEventListener("keydown", manejarTeclado);
 });
 
@@ -32,7 +63,6 @@ async function cargarPagina(pagina, esInicio = false) {
     const res  = await fetch(`${API_URL}?action=imagenes&page=${pagina}&pageSize=${PAGE_SIZE}`);
     const data = await res.json();
 
-    // Soporte para { total, items } y array plano (fallback)
     let nuevas;
     if (Array.isArray(data)) {
       totalImagenes = data.length;
@@ -42,7 +72,6 @@ async function cargarPagina(pagina, esInicio = false) {
       nuevas        = data.items;
     }
 
-    // Evitar duplicados por si el mismo id ya estaba cargado
     const idsActuales = new Set(imagenes.map(i => i.id));
     const sinDuplicar = nuevas.filter(i => !idsActuales.has(i.id));
     imagenes = [...imagenes, ...sinDuplicar];
@@ -69,7 +98,6 @@ async function cargarPagina(pagina, esInicio = false) {
   }
 }
 
-// Dispara la siguiente página si estamos cerca del final de lo cargado
 function checkPrefetch() {
   const restantes = imagenes.length - 1 - indiceActual;
   const hayMas    = imagenes.length < totalImagenes;
@@ -87,10 +115,23 @@ function mostrarImagen(idx) {
 
   setTimeout(() => {
     const archivo = imagenes[idx];
-    const src     = `https://drive.google.com/thumbnail?id=${archivo.id}&sz=w1600`;
-    img.src     = src;
-    zoomImg.src = src;
+
+    // ── Usar la URL autenticada que viene del GS ──
+    // Fallback al thumbnail público por si acaso
+    const src = archivo.url
+      || `https://drive.google.com/thumbnail?id=${archivo.id}&sz=w1600`;
+
+    // Asignar onload/onerror ANTES de cambiar src (fix para caché del browser)
     img.onload  = () => { img.style.opacity = "1"; };
+    img.onerror = () => {
+      img.style.opacity = "1";
+      setStatus("⚠️ No se pudo cargar: " + archivo.name);
+    };
+    img.src     = src;
+
+    zoomImg.onload  = () => {};
+    zoomImg.onerror = () => {};
+    zoomImg.src     = src;
 
     setStatus(archivo.name);
     document.getElementById("counter").textContent =
@@ -159,10 +200,10 @@ function actualizarDots(idx) {
     nuevo.classList.remove("dot-sm", "dot-xs");
 
     if (total > cantidad) {
-      if      (i === 0            && inicio > 0)                    nuevo.classList.add("dot-xs");
-      else if (i === 1            && inicio > 0)                    nuevo.classList.add("dot-sm");
-      else if (i === cantidad - 1 && inicio + cantidad < total)     nuevo.classList.add("dot-xs");
-      else if (i === cantidad - 2 && inicio + cantidad < total)     nuevo.classList.add("dot-sm");
+      if      (i === 0            && inicio > 0)                nuevo.classList.add("dot-xs");
+      else if (i === 1            && inicio > 0)                nuevo.classList.add("dot-sm");
+      else if (i === cantidad - 1 && inicio + cantidad < total) nuevo.classList.add("dot-xs");
+      else if (i === cantidad - 2 && inicio + cantidad < total) nuevo.classList.add("dot-sm");
     }
 
     nuevo.onclick = () => { indiceActual = realIdx; mostrarImagen(realIdx); };
@@ -206,14 +247,12 @@ async function enviarClasificacion() {
 
     showToast(`✓ Clasificado como ${etiquetaCategoria(cat)}`, "success");
 
-    // Quitar de la lista local
     delete selecciones[archivo.id];
     imagenes.splice(indiceActual, 1);
     totalImagenes = Math.max(0, totalImagenes - 1);
 
     if (!imagenes.length) {
       if (imagenes.length < totalImagenes) {
-        // Quedan más en el servidor → cargar siguiente lote
         paginaActual  = 0;
         imagenes      = [];
         totalImagenes = 0;
@@ -272,5 +311,4 @@ function showToast(msg, type = "") {
 // ====== ZOOM ======
 function abrirZoom()  { document.getElementById("zoom").style.display = "flex"; }
 function cerrarZoom() { document.getElementById("zoom").style.display = "none"; }
-
 
