@@ -6,30 +6,78 @@ let indiceActual = 0;
 let selecciones = {};
 let enviando = false;
 
-const DOTS_VISIBLES = 9; // cuántos puntos se muestran a la vez
+// ── Paginación ──
+const PAGE_SIZE = 30;
+let paginaActual = 0;       // página que se cargó por última vez
+let totalImagenes = 0;      // total reportado por el servidor
+let cargandoPagina = false;
+// El servidor debe devolver { total: N, items: [...] } cuando se le pasa page=
+// Si sigues devolviendo un array plano, se usa modo "array completo" (fallback).
+const PREFETCH_UMBRAL = 5;  // cuántas imágenes antes del final se dispara la siguiente carga
+
+const DOTS_VISIBLES = 9;
 
 // ====== INIT ======
 document.addEventListener("DOMContentLoaded", () => {
-  cargarImagenes();
+  cargarPagina(0, true);
   document.addEventListener("keydown", manejarTeclado);
 });
 
-// ====== CARGAR IMÁGENES ======
-async function cargarImagenes() {
-  setStatus("Cargando imágenes…");
+// ====== CARGAR PÁGINA ======
+async function cargarPagina(pagina, esInicio = false) {
+  if (cargandoPagina) return;
+  cargandoPagina = true;
+
+  if (esInicio) setStatus("Cargando imágenes…");
+
   try {
-    const res = await fetch(`${API_URL}?action=imagenes`);
-    imagenes = await res.json();
+    const res = await fetch(`${API_URL}?action=imagenes&page=${pagina}&pageSize=${PAGE_SIZE}`);
+    const data = await res.json();
+
+    // Soporte para dos formatos de respuesta:
+    // A) { total: N, items: [...] }   ← ideal, el backend pagina
+    // B) Array plano                  ← fallback: cargamos todo de una y paginamos en cliente
+    if (Array.isArray(data)) {
+      // Fallback: si el servidor devuelve todo el array, lo troceamos aquí
+      const todas = data;
+      totalImagenes = todas.length;
+      const inicio = pagina * PAGE_SIZE;
+      const nuevas = todas.slice(inicio, inicio + PAGE_SIZE);
+      imagenes = [...imagenes, ...nuevas];
+    } else {
+      totalImagenes = data.total ?? (imagenes.length + data.items.length);
+      imagenes = [...imagenes, ...data.items];
+    }
+
+    paginaActual = pagina;
+
     if (!imagenes.length) {
       setStatus("✓ No hay imágenes pendientes.");
       ocultarViewer();
       return;
     }
-    indiceActual = 0;
-    renderDots();
-    mostrarImagen(indiceActual);
+
+    if (esInicio) {
+      indiceActual = 0;
+      renderDots();
+      mostrarImagen(indiceActual);
+    } else {
+      // Solo actualizar dots con el nuevo total conocido
+      renderDots();
+    }
   } catch (err) {
     setStatus("❌ Error al cargar imágenes: " + err.message);
+  } finally {
+    cargandoPagina = false;
+  }
+}
+
+// Comprueba si hay que pre-cargar la siguiente página
+function checkPrefetch() {
+  const imagenesRestantes = imagenes.length - 1 - indiceActual;
+  const hayMas = imagenes.length < totalImagenes;
+  if (hayMas && imagenesRestantes <= PREFETCH_UMBRAL) {
+    cargarPagina(paginaActual + 1);
   }
 }
 
@@ -48,22 +96,28 @@ function mostrarImagen(idx) {
     img.onload = () => { img.style.opacity = "1"; };
 
     setStatus(archivo.name);
-    document.getElementById("counter").textContent = `${idx + 1} / ${imagenes.length}`;
+    document.getElementById("counter").textContent = `${idx + 1} / ${totalImagenes || imagenes.length}`;
 
     document.getElementById("btn-prev").disabled = idx === 0;
-    document.getElementById("btn-next").disabled = idx === imagenes.length - 1;
+    // Deshabilitar "siguiente" solo si es la última imagen conocida Y no hay más páginas
+    const esUltima = idx === imagenes.length - 1 && imagenes.length >= totalImagenes;
+    document.getElementById("btn-next").disabled = esUltima;
 
     actualizarDots(idx);
 
     const selGuardada = selecciones[archivo.id] ?? null;
     restaurarSeleccion(selGuardada);
+
+    checkPrefetch();
   }, 150);
 }
 
 // ====== NAVEGACIÓN ======
 function navegarImagen(delta) {
   const nuevo = indiceActual + delta;
-  if (nuevo < 0 || nuevo >= imagenes.length) return;
+  if (nuevo < 0) return;
+  // Si intentamos ir más allá de lo cargado pero aún hay páginas, esperamos
+  if (nuevo >= imagenes.length) return;
   indiceActual = nuevo;
   mostrarImagen(indiceActual);
 }
@@ -81,9 +135,8 @@ function renderDots() {
   bar.innerHTML = "";
 
   const total = imagenes.length;
-  if (total <= 1) return; // con 1 imagen no tiene sentido mostrar dots
+  if (total <= 1) return;
 
-  // Cuántos dots crear: si hay menos que DOTS_VISIBLES, todos; si no, DOTS_VISIBLES
   const cantidad = Math.min(total, DOTS_VISIBLES);
   for (let i = 0; i < cantidad; i++) {
     const d = document.createElement("span");
@@ -102,7 +155,6 @@ function actualizarDots(idx) {
   const total = imagenes.length;
   const cantidad = dotEls.length;
 
-  // Calcular ventana: qué rango de índices reales representan los dots visibles
   let inicio = idx - Math.floor(cantidad / 2);
   inicio = Math.max(0, inicio);
   inicio = Math.min(inicio, total - cantidad);
@@ -110,13 +162,11 @@ function actualizarDots(idx) {
   dotEls.forEach((d, i) => {
     const realIdx = inicio + i;
 
-    // Quitar eventos anteriores clonando el nodo
     const nuevo = d.cloneNode(true);
     d.parentNode.replaceChild(nuevo, d);
 
     nuevo.classList.toggle("active", realIdx === idx);
 
-    // Tamaño contextual: más pequeños en los extremos si hay overflow
     nuevo.classList.remove("dot-sm", "dot-xs");
     if (total > cantidad) {
       if (i === 0 && inicio > 0) nuevo.classList.add("dot-xs");
@@ -172,8 +222,9 @@ async function enviarClasificacion() {
 
     delete selecciones[archivo.id];
     imagenes.splice(indiceActual, 1);
+    totalImagenes = Math.max(0, totalImagenes - 1);
 
-    if (!imagenes.length) {
+    if (!imagenes.length && imagenes.length >= totalImagenes) {
       setStatus("✓ Todas las imágenes clasificadas.");
       ocultarViewer();
       return;
@@ -227,8 +278,4 @@ function abrirZoom() {
 function cerrarZoom() {
   document.getElementById("zoom").style.display = "none";
 }
-
-
-
-
 
