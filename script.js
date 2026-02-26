@@ -1,4 +1,4 @@
-const API_URL = "https://script.google.com/macros/s/AKfycbz6AqqbOf67v-DzHL0XULNZKdWVRL2sNqFE6X9H1jacrPfCAVF_nc7mNxt4sCgdtkDi/exec";
+const API_URL = "https://script.google.com/macros/s/AKfycbxyK31Xjh0wIeE7Q7-9XRAtuexglp6uM8tA-5k-5ptXeEUrcUNPPmDL5l1I_W8yk4cB/exec";
 
 // ====== ESTADO ======
 let imagenes      = [];
@@ -15,40 +15,9 @@ const PREFETCH_UMBRAL = 8;
 
 const DOTS_VISIBLES = 9;
 
-// ── Token OAuth ──
-// El GS embebe el token en las URLs. Refrescamos cada 50 min
-// para evitar que expire (duración real: ~60 min).
-let tokenRefreshTimer = null;
-const TOKEN_REFRESH_MS = 50 * 60 * 1000; // 50 minutos
-
-async function refrescarToken() {
-  try {
-    const res  = await fetch(`${API_URL}?action=token`);
-    const data = await res.json();
-    if (!data.token) return;
-
-    // Actualizar las URLs de todas las imágenes ya cargadas con el nuevo token
-    imagenes = imagenes.map(img => {
-      const url = new URL(img.url);
-      url.searchParams.set("access_token", data.token);
-      return { ...img, url: url.toString() };
-    });
-
-    console.log("Token OAuth renovado");
-  } catch (err) {
-    console.warn("No se pudo renovar el token:", err.message);
-  }
-}
-
-function iniciarRefreshToken() {
-  if (tokenRefreshTimer) clearInterval(tokenRefreshTimer);
-  tokenRefreshTimer = setInterval(refrescarToken, TOKEN_REFRESH_MS);
-}
-
 // ====== INIT ======
 document.addEventListener("DOMContentLoaded", () => {
   cargarPagina(0, true);
-  iniciarRefreshToken();
   document.addEventListener("keydown", manejarTeclado);
 });
 
@@ -116,18 +85,17 @@ function mostrarImagen(idx) {
   setTimeout(() => {
     const archivo = imagenes[idx];
 
-    // ── Usar la URL autenticada que viene del GS ──
-    // Fallback al thumbnail público por si acaso
+    // Usar la URL con driveId que viene del GS, fallback al thumbnail simple
     const src = archivo.url
       || `https://drive.google.com/thumbnail?id=${archivo.id}&sz=w1600`;
 
-    // Asignar onload/onerror ANTES de cambiar src (fix para caché del browser)
+    // onload/onerror ANTES de asignar src (fix para imágenes en caché del browser)
     img.onload  = () => { img.style.opacity = "1"; };
     img.onerror = () => {
       img.style.opacity = "1";
       setStatus("⚠️ No se pudo cargar: " + archivo.name);
     };
-    img.src     = src;
+    img.src = src;
 
     zoomImg.onload  = () => {};
     zoomImg.onerror = () => {};
@@ -162,7 +130,7 @@ function manejarTeclado(e) {
   if (e.key === "Escape")     cerrarZoom();
 }
 
-// ====== DOTS — ventana deslizante ======
+// ====== DOTS ======
 function renderDots() {
   const bar = document.getElementById("dots-bar");
   bar.innerHTML = "";
