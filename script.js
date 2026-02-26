@@ -1,4 +1,4 @@
-const API_URL = "https://script.google.com/macros/s/AKfycbwGgiQGe6tpDq0JNexrAr4M6EsoGV0__3C6TEp55G17UKMNcPHsNx5IP_dbLDdxyh8x/exec";
+const API_URL = "https://script.google.com/macros/s/AKfycbytQPqbrbHjH81f-pUHkLredDKJgSbtv1J-l0I45a0V5x4DDoDZTuf57bh07RVeirfo/exec";
 
 // ====== ESTADO ======
 let imagenes = [];
@@ -227,6 +227,7 @@ function abrirZoom() {
 function cerrarZoom() {
   document.getElementById("zoom").style.display = "none";
 }
+
 
 
 
