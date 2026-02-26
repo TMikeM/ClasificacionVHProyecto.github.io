@@ -1,4 +1,4 @@
-const API_URL = "https://script.google.com/macros/s/AKfycbwFdgWgyTLWLeAVF8nxJ1PNkfTIwfkv8pkDr4ckuPNy3w1_DvP6kGyrXggkb6vpBGy-/exec";
+const API_URL = "https://script.google.com/macros/s/AKfycbwPOrktSKydyjjcbrl2ha2ma-4dXVtl6xd6lSTQhRc0CyTI2iXGUAq5D-yz37EUBVuw/exec";
 
 // ====== ESTADO ======
 let imagenes      = [];
@@ -12,8 +12,14 @@ let paginaActual      = 0;
 let totalImagenes     = 0;
 let cargandoPagina    = false;
 const PREFETCH_UMBRAL = 8;
+const DOTS_VISIBLES   = 9;
 
-const DOTS_VISIBLES = 9;
+// ── Cache de imágenes base64 ya cargadas ──
+// Evita volver a pedir al GS si ya la cargamos antes
+const imgCache = new Map();
+
+// ── Prefetch: precargar la siguiente imagen en segundo plano ──
+let prefetchController = null;
 
 // ====== INIT ======
 document.addEventListener("DOMContentLoaded", () => {
@@ -21,11 +27,10 @@ document.addEventListener("DOMContentLoaded", () => {
   document.addEventListener("keydown", manejarTeclado);
 });
 
-// ====== CARGAR PÁGINA ======
+// ====== CARGAR PÁGINA (lista de IDs) ======
 async function cargarPagina(pagina, esInicio = false) {
   if (cargandoPagina) return;
   cargandoPagina = true;
-
   if (esInicio) setStatus("Cargando imágenes…");
 
   try {
@@ -44,7 +49,6 @@ async function cargarPagina(pagina, esInicio = false) {
     const idsActuales = new Set(imagenes.map(i => i.id));
     const sinDuplicar = nuevas.filter(i => !idsActuales.has(i.id));
     imagenes = [...imagenes, ...sinDuplicar];
-
     paginaActual = pagina;
 
     if (!imagenes.length) {
@@ -61,7 +65,7 @@ async function cargarPagina(pagina, esInicio = false) {
       renderDots();
     }
   } catch (err) {
-    setStatus("❌ Error al cargar imágenes: " + err.message);
+    setStatus("❌ Error al cargar lista: " + err.message);
   } finally {
     cargandoPagina = false;
   }
@@ -75,31 +79,58 @@ function checkPrefetch() {
   }
 }
 
+// ====== OBTENER IMAGEN BASE64 DESDE EL GS ======
+async function fetchImagenBase64(id) {
+  // Si ya está en cache, devolverla directo
+  if (imgCache.has(id)) return imgCache.get(id);
+
+  const res  = await fetch(`${API_URL}?action=imagen&id=${id}`);
+  const json = await res.json();
+
+  if (json.error) throw new Error(json.error);
+
+  const src = `data:${json.mime};base64,${json.data}`;
+  imgCache.set(id, src);
+  return src;
+}
+
+// Precargar la imagen siguiente en segundo plano sin bloquear la UI
+function prefetchSiguiente(idx) {
+  const siguiente = imagenes[idx + 1];
+  if (!siguiente || imgCache.has(siguiente.id)) return;
+
+  // Usar setTimeout para no competir con la imagen actual
+  setTimeout(() => {
+    fetchImagenBase64(siguiente.id).catch(() => {});
+  }, 800);
+}
+
 // ====== MOSTRAR IMAGEN ======
-function mostrarImagen(idx) {
+async function mostrarImagen(idx) {
   const img     = document.getElementById("vh-image");
   const zoomImg = document.getElementById("zoom-img");
+  const archivo = imagenes[idx];
 
+  // Mostrar spinner mientras carga
   img.style.opacity = "0";
+  mostrarSpinner(true);
+  setStatus(`Cargando ${archivo.name}…`);
 
-  setTimeout(() => {
-    const archivo = imagenes[idx];
+  try {
+    const src = await fetchImagenBase64(archivo.id);
 
-    // Usar la URL con driveId que viene del GS, fallback al thumbnail simple
-    const src = archivo.url
-      || `https://drive.google.com/thumbnail?id=${archivo.id}&sz=w1600`;
-
-    // onload/onerror ANTES de asignar src (fix para imágenes en caché del browser)
-    img.onload  = () => { img.style.opacity = "1"; };
+    // onload antes de asignar src (fix para caché del browser)
+    img.onload = () => {
+      img.style.opacity = "1";
+      mostrarSpinner(false);
+    };
     img.onerror = () => {
       img.style.opacity = "1";
-      setStatus("⚠️ No se pudo cargar: " + archivo.name);
+      mostrarSpinner(false);
+      setStatus("⚠️ No se pudo mostrar: " + archivo.name);
     };
-    img.src = src;
-
-    zoomImg.onload  = () => {};
-    zoomImg.onerror = () => {};
-    zoomImg.src     = src;
+    img.src     = src;
+    zoomImg.src = src;
 
     setStatus(archivo.name);
     document.getElementById("counter").textContent =
@@ -112,7 +143,20 @@ function mostrarImagen(idx) {
     actualizarDots(idx);
     restaurarSeleccion(selecciones[archivo.id] ?? null);
     checkPrefetch();
-  }, 150);
+    prefetchSiguiente(idx);
+
+  } catch (err) {
+    mostrarSpinner(false);
+    img.style.opacity = "1";
+    setStatus("❌ Error al cargar imagen: " + err.message);
+  }
+}
+
+// ====== SPINNER ======
+function mostrarSpinner(visible) {
+  let spinner = document.getElementById("img-spinner");
+  if (!spinner) return;
+  spinner.style.display = visible ? "flex" : "none";
 }
 
 // ====== NAVEGACIÓN ======
@@ -134,10 +178,8 @@ function manejarTeclado(e) {
 function renderDots() {
   const bar = document.getElementById("dots-bar");
   bar.innerHTML = "";
-
   const total = imagenes.length;
   if (total <= 1) return;
-
   const cantidad = Math.min(total, DOTS_VISIBLES);
   for (let i = 0; i < cantidad; i++) {
     const d = document.createElement("span");
@@ -215,12 +257,14 @@ async function enviarClasificacion() {
 
     showToast(`✓ Clasificado como ${etiquetaCategoria(cat)}`, "success");
 
+    // Limpiar cache de esta imagen ya clasificada
+    imgCache.delete(archivo.id);
     delete selecciones[archivo.id];
     imagenes.splice(indiceActual, 1);
     totalImagenes = Math.max(0, totalImagenes - 1);
 
     if (!imagenes.length) {
-      if (imagenes.length < totalImagenes) {
+      if (totalImagenes > 0) {
         paginaActual  = 0;
         imagenes      = [];
         totalImagenes = 0;
@@ -279,5 +323,4 @@ function showToast(msg, type = "") {
 // ====== ZOOM ======
 function abrirZoom()  { document.getElementById("zoom").style.display = "flex"; }
 function cerrarZoom() { document.getElementById("zoom").style.display = "none"; }
-
 
